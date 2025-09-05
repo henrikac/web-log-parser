@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+    <head>
+        <title layout:fragment="title">Upload · WebLogParser</title>
+    </head>
+    <body>
+        <div layout:fragment="content" class="container pt-5">
+            <pre th:if="${result.content().isPresent()}" th:text="${result.content().get()}"></pre>
+        </div>
+    </body>
+</html>
