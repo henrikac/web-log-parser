@@ -3,6 +3,9 @@ package com.github.henrikac.weblogparser.controller;
 import com.github.henrikac.weblogparser.form.LogUploadForm;
 import com.github.henrikac.weblogparser.view.ResultView;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -22,14 +25,18 @@ import java.util.UUID;
 @Controller
 public class LogUploadController {
 
+    private static final Logger logger = LoggerFactory.getLogger(LogUploadController.class);
+
     @GetMapping("/")
     public String upload(Model model) {
+        logger.debug("Serving upload form");
+
         model.addAttribute("logUploadForm", new LogUploadForm());
 
         return "upload";
     }
 
-    @PostMapping("/upload")
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public String handleUpload(
             @Valid @ModelAttribute("logUploadForm") LogUploadForm form,
             BindingResult bindingResult,
@@ -41,22 +48,30 @@ public class LogUploadController {
         }
 
         MultipartFile file = form.getFile();
-        Optional<String> filename = Optional.ofNullable(file.getOriginalFilename());
+        Optional<String> originalFilename = Optional.ofNullable(file.getOriginalFilename());
 
-        if (filename.isEmpty()) {
+        if (originalFilename.isEmpty()) {
+            logger.warn("Uploaded file is missing filename");
+
             redirect.addFlashAttribute("error", "Missing filename");
 
             return "redirect:/";
         }
 
+        String filename = UUID.randomUUID() + "-" + originalFilename.get();
+
         try {
             Path tmpDir = Paths.get(System.getProperty("java.io.tmpdir"));
-            Path dest = tmpDir.resolve(UUID.randomUUID() + "-" + filename);
+            Path dest = tmpDir.resolve(filename);
 
             file.transferTo(dest);
 
             redirect.addFlashAttribute("path", dest.toString());
+
+            logger.info("Successfully saved file: {}", filename);
         } catch (IOException e) {
+            logger.warn("Failed to save file: {}", filename, e);
+
             redirect.addFlashAttribute("error", "Something went wrong while saving the file");
 
             return "redirect:/";
@@ -73,16 +88,27 @@ public class LogUploadController {
         }
 
         Path filePath = Paths.get(path);
+        String filename = String.valueOf(filePath.getFileName());
         Optional<String> content;
 
         try {
             content = Optional.of(Files.readString(filePath));
-        } catch (IOException _) {
+
+            logger.info("Successfully read file: {}", filename);
+        } catch (IOException e) {
+            logger.warn("Failed to read file {}", filename, e);
+
             content = Optional.empty();
         } finally {
             try {
-                Files.deleteIfExists(filePath);
-            } catch (IOException _) {}
+                if (Files.deleteIfExists(filePath)) {
+                    logger.debug("Successfully deleted file: {}", filePath);
+                } else {
+                    logger.debug("Failed to delete file (non-existing file): {}", filePath);
+                }
+            } catch (IOException e) {
+                logger.warn("Failed to delete file: {}", filename, e);
+            }
         }
 
         ResultView result = new ResultView(content);
