@@ -19,6 +19,14 @@
                           enctype="multipart/form-data"
                     >
                         <div class="mb-4">
+                            <div th:each="lvl : ${allLogLevels}" class="form-check form-check-inline">
+                                <input type="checkbox" th:field="*{logLevels}" th:value="${lvl}"/>
+                                <label th:text="${lvl}"></label>
+                            </div>
+                            <small class="d-block text-danger" th:if="${#fields.hasErrors('logLevels')}" th:errors="*{logLevels}"></small>
+                        </div>
+
+                        <div class="mb-4">
                             <label for="file" class="form-label">Log file:</label>
                             <input type="file" th:field="*{file}" id="file" class="form-control" accept=".log" required/>
                             <small class="text-danger" th:if="${#fields.hasErrors('file')}" th:errors="*{file}"></small>

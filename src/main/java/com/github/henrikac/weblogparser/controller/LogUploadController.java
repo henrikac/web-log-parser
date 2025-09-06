@@ -1,5 +1,6 @@
 package com.github.henrikac.weblogparser.controller;
 
+import com.github.henrikac.logparser.core.LogLevel;
 import com.github.henrikac.weblogparser.form.LogUploadForm;
 import com.github.henrikac.weblogparser.view.ResultView;
 import jakarta.validation.Valid;
@@ -26,6 +27,12 @@ import java.util.UUID;
 public class LogUploadController {
 
     private static final Logger logger = LoggerFactory.getLogger(LogUploadController.class);
+
+    @SuppressWarnings("unused")
+    @ModelAttribute("allLogLevels")
+    public LogLevel[] allLogLevels() {
+        return LogLevel.values();
+    }
 
     @GetMapping("/")
     public String upload(Model model) {
