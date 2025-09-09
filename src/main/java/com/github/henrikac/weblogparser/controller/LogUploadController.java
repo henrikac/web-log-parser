@@ -1,7 +1,10 @@
 package com.github.henrikac.weblogparser.controller;
 
+import com.github.henrikac.logparser.cli.CommandLineOption;
 import com.github.henrikac.logparser.core.LogLevel;
+import com.github.henrikac.weblogparser.exception.ProcessingException;
 import com.github.henrikac.weblogparser.form.LogUploadForm;
+import com.github.henrikac.weblogparser.service.LogProcessingService;
 import com.github.henrikac.weblogparser.view.ResultView;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -20,6 +23,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,6 +32,12 @@ import java.util.UUID;
 public class LogUploadController {
 
     private static final Logger logger = LoggerFactory.getLogger(LogUploadController.class);
+
+    private final LogProcessingService logProcessingService;
+
+    public LogUploadController(LogProcessingService logProcessingService) {
+        this.logProcessingService = logProcessingService;
+    }
 
     @SuppressWarnings("unused")
     @ModelAttribute("allLogLevels")
@@ -74,6 +85,7 @@ public class LogUploadController {
             file.transferTo(dest);
 
             redirect.addFlashAttribute("path", dest.toString());
+            redirect.addFlashAttribute("logUploadForm", form);
 
             logger.info("Successfully saved file: {}", filename);
         } catch (IOException e) {
@@ -88,7 +100,10 @@ public class LogUploadController {
     }
 
     @GetMapping("/result")
-    public String result(@ModelAttribute(value = "path", binding = false) String path, Model model) {
+    public String result(
+            @ModelAttribute(value = "path", binding = false) String path,
+            @ModelAttribute("logUploadForm") LogUploadForm logUploadForm,
+            Model model) {
 
         if (path == null || path.isEmpty()) {
             return "redirect:/";
@@ -97,25 +112,36 @@ public class LogUploadController {
         Path filePath = Paths.get(path);
         String filename = String.valueOf(filePath.getFileName());
         Optional<String> content;
+        ArrayList<CommandLineOption> options = new ArrayList<>();
+
+        options.add(new CommandLineOption("--file", String.valueOf(filePath)));
+
+        for (LogLevel level : logUploadForm.getLogLevels()) {
+            CommandLineOption option = new CommandLineOption("--level", level.name());
+
+            options.add(option);
+        }
 
         try {
-            content = Optional.of(Files.readString(filePath));
+            List<String> lines = this.logProcessingService.parseLogFile(options);
 
-            logger.info("Successfully read file: {}", filename);
+            content = Optional.of(String.join("\n", lines));
+
+            logger.info("Successfully parsed file: {}", filename);
+
+            if (Files.deleteIfExists(filePath)) {
+                logger.debug("Successfully deleted file: {}", filePath);
+            } else {
+                logger.debug("Failed to delete file (non-existing file): {}", filePath);
+            }
         } catch (IOException e) {
-            logger.warn("Failed to read file {}", filename, e);
+            logger.warn("Failed to delete file: {}", filename, e);
 
             content = Optional.empty();
-        } finally {
-            try {
-                if (Files.deleteIfExists(filePath)) {
-                    logger.debug("Successfully deleted file: {}", filePath);
-                } else {
-                    logger.debug("Failed to delete file (non-existing file): {}", filePath);
-                }
-            } catch (IOException e) {
-                logger.warn("Failed to delete file: {}", filename, e);
-            }
+        } catch (ProcessingException e) {
+            logger.error("Failed to process log file: {}", filename, e);
+
+            content = Optional.empty();
         }
 
         ResultView result = new ResultView(content);
